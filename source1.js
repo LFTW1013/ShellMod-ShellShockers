@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         ShellShockers LEBMOD Menu (Draggable)
+// @name         ShellShockers LEBMOD 
 // @namespace    http://tampermonkey.net/
 // @version      1.1
 // @description  Custom draggable mod menu with toggles (Rainbow Crosshair example)

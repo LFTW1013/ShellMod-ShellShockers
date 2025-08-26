@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         ShellShockers LEBMOD 
+// @name         ShellShockers LEBMOD
 // @namespace    http://tampermonkey.net/
-// @version      1.1
-// @description  Custom draggable mod menu with toggles (Rainbow Crosshair example)
+// @version      1.3
+// @description  Custom draggable mod menu with Rainbow Crosshair, Ping, Music Player (no FPS spam)
 // @author       You
 // @match        *://shellshock.io/*
 // @grant        GM_addStyle
@@ -12,10 +12,13 @@
     'use strict';
 
     let crosshairEnabled = true;
+    let pingEnabled = false;
+    let musicEnabled = false;
+
+    let pingDiv, audio;
 
     // --- Styles ---
     GM_addStyle(`
-        /* Menu container */
         #lebmodMenu {
             position: fixed;
             top: 100px;
@@ -52,8 +55,6 @@
             transform: scale(1.2);
             cursor: pointer;
         }
-
-        /* Crosshair */
         #customCrosshair {
             position: fixed;
             top: 50%;
@@ -85,6 +86,18 @@
             transform: translateX(-50%);
             background: linear-gradient(180deg, red, orange, yellow, green, cyan, blue, violet);
         }
+        #pingCounter {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            font-family: monospace;
+            font-size: 14px;
+            color: #0f0;
+            background: rgba(0,0,0,0.5);
+            padding: 4px 6px;
+            border-radius: 4px;
+            z-index: 9999;
+        }
     `);
 
     // --- Create menu ---
@@ -96,6 +109,16 @@
             <label>Rainbow Crosshair</label>
             <input type="checkbox" id="toggleCrosshair" checked>
         </div>
+        <div class="lebmodToggle">
+            <label>Show Ping</label>
+            <input type="checkbox" id="togglePing">
+        </div>
+        <div class="lebmodToggle">
+            <label>Music Player</label>
+            <input type="checkbox" id="toggleMusic">
+        </div>
+        <input type="file" id="musicFile" accept="audio/*" style="width:100%; margin-top:6px; display:none;">
+        <button id="musicPlayPause" style="width:100%; margin-top:4px; display:none;">Play</button>
     `;
     document.body.appendChild(menu);
 
@@ -104,10 +127,88 @@
     crosshair.id = "customCrosshair";
     document.body.appendChild(crosshair);
 
-    // --- Toggle logic ---
     document.getElementById("toggleCrosshair").addEventListener("change", function (e) {
         crosshairEnabled = e.target.checked;
         crosshair.style.display = crosshairEnabled ? "block" : "none";
+    });
+
+    // --- Ping Counter ---
+    function startPing() {
+        if (pingDiv) return;
+        pingDiv = document.createElement("div");
+        pingDiv.id = "pingCounter";
+        document.body.appendChild(pingDiv);
+
+        async function pingLoop() {
+            while (pingEnabled) {
+                const start = performance.now();
+                await fetch(location.href, { method: "HEAD", cache: "no-cache" }).catch(()=>{});
+                const end = performance.now();
+                const latency = Math.round(end - start);
+                pingDiv.textContent = "Ping: " + latency + " ms";
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
+        pingLoop();
+    }
+    function stopPing() {
+        if (pingDiv) {
+            pingDiv.remove();
+            pingDiv = null;
+        }
+    }
+
+    // --- Music Player ---
+    const musicFile = document.getElementById("musicFile");
+    const musicPlayPause = document.getElementById("musicPlayPause");
+
+    function startMusic() {
+        musicFile.style.display = "block";
+        musicPlayPause.style.display = "block";
+    }
+    function stopMusic() {
+        musicFile.style.display = "none";
+        musicPlayPause.style.display = "none";
+        if (audio) {
+            audio.pause();
+            audio = null;
+        }
+    }
+
+    musicFile.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            if (audio) audio.pause();
+            audio = new Audio(evt.target.result);
+            audio.loop = true;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    musicPlayPause.addEventListener("click", () => {
+        if (!audio) return;
+        if (audio.paused) {
+            audio.play();
+            musicPlayPause.textContent = "Pause";
+        } else {
+            audio.pause();
+            musicPlayPause.textContent = "Play";
+        }
+    });
+
+    // --- Toggle bindings ---
+    document.getElementById("togglePing").addEventListener("change", (e) => {
+        pingEnabled = e.target.checked;
+        if (pingEnabled) startPing();
+        else stopPing();
+    });
+
+    document.getElementById("toggleMusic").addEventListener("change", (e) => {
+        musicEnabled = e.target.checked;
+        if (musicEnabled) startMusic();
+        else stopMusic();
     });
 
     // --- Toggle menu with key "0" ---
@@ -122,24 +223,22 @@
     // --- Dragging logic ---
     let isDragging = false;
     let offsetX, offsetY;
-
     menu.addEventListener("mousedown", (e) => {
         isDragging = true;
         offsetX = e.clientX - menu.offsetLeft;
         offsetY = e.clientY - menu.offsetTop;
         menu.style.cursor = "grabbing";
     });
-
     document.addEventListener("mousemove", (e) => {
         if (isDragging) {
             menu.style.left = (e.clientX - offsetX) + "px";
             menu.style.top = (e.clientY - offsetY) + "px";
-            menu.style.right = "auto"; // unlock from right
+            menu.style.right = "auto";
         }
     });
-
     document.addEventListener("mouseup", () => {
         isDragging = false;
         menu.style.cursor = "grab";
     });
+
 })();

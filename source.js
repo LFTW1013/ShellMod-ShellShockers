@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         ShellShockers LEBMOD
+// @name         ShellShockers ShellMod
 // @namespace    http://tampermonkey.net/
 // @version      2.5
 // @description  Mod menu with Crosshair, Ping, Clock, Music (ESP removed, KD + Themes removed)
@@ -23,7 +23,7 @@
 
     // --- Base Styles ---
     GM_addStyle(`
-        #lebmodMenu {
+        #shellmodMenu {
             position: fixed;
             top: 100px;
             right: 50px;
@@ -38,7 +38,7 @@
             color: #0f0;
             border: 2px solid #0f0;
         }
-        #lebmodMenu h1 {
+        #shellmodMenu h1 {
             text-align: center;
             font-size: 18px;
             margin: 5px 0;
@@ -62,15 +62,15 @@
             padding: 6px;
             background: #111;
         }
-        .lebmodToggle {
+        .shellmodToggle {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin: 6px 0;
         }
-        .lebmodToggle label { flex: 1; }
-        .lebmodToggle input,
-        .lebmodToggle button {
+        .shellmodToggle label { flex: 1; }
+        .shellmodToggle input,
+        .shellmodToggle button {
             transform: scale(1.1);
             cursor: pointer;
             background: #111;
@@ -131,18 +131,18 @@
 
     // --- Create menu ---
     const menu = document.createElement("div");
-    menu.id = "lebmodMenu";
+    menu.id = "shellmodMenu";
     menu.innerHTML = `
-        <h1>LEBMOD</h1>
+        <h1>ShellMod</h1>
 
         <div class="category">
             <div class="category-header">[+] Displays</div>
             <div class="category-content">
-                <div class="lebmodToggle">
+                <div class="shellmodToggle">
                     <label>Show Ping</label>
                     <input type="checkbox" id="togglePing">
                 </div>
-                <div class="lebmodToggle">
+                <div class="shellmodToggle">
                     <label>Clock</label>
                     <button id="clockToggle">Start</button>
                 </div>
@@ -152,7 +152,7 @@
         <div class="category">
             <div class="category-header">[+] Crosshairs</div>
             <div class="category-content">
-                <div class="lebmodToggle">
+                <div class="shellmodToggle">
                     <label>Rainbow Crosshair</label>
                     <input type="checkbox" id="toggleCrosshair" checked>
                 </div>
@@ -162,7 +162,7 @@
         <div class="category">
             <div class="category-header">[+] Other</div>
             <div class="category-content">
-                <div class="lebmodToggle">
+                <div class="shellmodToggle">
                     <label>Music Player</label>
                     <input type="checkbox" id="toggleMusic">
                 </div>

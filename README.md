@@ -1,4 +1,4 @@
-LebMod is a Modding menu/service for Shellshockers with the following mods:
+ShellMod (Formerly LebMod) is a Modding menu/service for Shellshockers with the following mods:
 - Rainbow Crosshair
 - Ping Display
 - Music Player

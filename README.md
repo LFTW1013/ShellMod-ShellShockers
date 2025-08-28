@@ -7,7 +7,9 @@ ShellMod (Formerly LebMod) is a Modding menu/service for Shellshockers with the 
 --------------------------------
   Used with a userscript extention like TamperMonkey. To use insert the source code into the extention by creating a new userscript and pasting/uploading the code into extention. (Varies depending on which extention you use.) Controls:
 "0" - Open/Close LebMod menu
+
 +++++++++++++++++++++++++++++++++++++++++
+
 This project now includes the collaborator(s):
 - LFTW1013 (Main)
 - moopguy

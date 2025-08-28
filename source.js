@@ -2,8 +2,8 @@
 // @name         ShellShockers ShellMod
 // @namespace    http://tampermonkey.net/
 // @version      2.5
-// @description  Mod menu with Crosshair, Ping, Clock, Music (ESP removed, KD + Themes removed)
-// @author       You
+// @description  Mod menu for shellshockers
+// @author       LFTW1013
 // @match        *://shellshock.io/*
 // @grant        GM_addStyle
 // ==/UserScript==

@@ -20,4 +20,4 @@ https://www.tampermonkey.net/
 
 This project now includes the collaborator(s):
 - LFTW1013 (Main)
-- moopguy
+- JL_THE_PRO (moopguy)

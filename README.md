@@ -17,6 +17,9 @@ https://www.tampermonkey.net/
 
 
 +++++++++++++++++++++++++++++++++++++++++
+INFO:
+- The JL_THE_PRO Script is a script for testing, items that are working their way into the final "source.js" code.
+-----------------------------------------
 
 This project now includes the collaborator(s):
 - LFTW1013 (Main)

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ShellShockers ShellMod
 // @namespace    http://tampermonkey.net/
-// @version      3.5
-// @description  ShellMod: Crosshair enable + standard/circular/rainbow + resize/thickness sliders, fixed right-angle issue + rainbow gradient lines
+// @version      3.8
+// @description  ShellMod: Crosshair enable + standard/circular/rainbow + resize/thickness sliders, fixed right-angle issue + rainbow gradient lines + global menu themes (MacBook Transparent now with black highlights)
 // @author       CJ_THE_PRO
 // @match        *://shellshock.io/*
 // @grant        GM_addStyle
@@ -33,7 +33,7 @@
         .shellmodToggle label { display:block; margin-bottom: 4px; }
         .colorRow { display:flex; gap:6px; flex-wrap:wrap; }
         .colorRow label { background: rgba(255,255,255,0.02); padding:4px 6px; border-radius:4px; cursor:pointer; border:1px solid rgba(15,255,15,0.15); }
-        .shellmodToggle input[type="checkbox"] { cursor:pointer; }
+        .shellmodToggle input[type="checkbox"], select, button, input[type="range"] { cursor:pointer; }
         hr { border: 1px solid #0f0; margin:6px 0; }
         #customCrosshair { position: fixed; top:50%; left:50%; pointer-events: none; z-index:9999; }
         #customCrosshair .hLine, #customCrosshair .vLine, #customCrosshair .circle { position: absolute; background: #0f0; }
@@ -41,8 +41,12 @@
         #pingCounter, #clockCounter { position: fixed; top: 10px; left: 10px; font-family: monospace; font-size: 14px; padding: 4px 6px; border-radius: 4px; z-index: 9999; cursor: grab; background: rgba(0,0,0,0.5); color: #0f0; border: 1px solid #0f0; }
         #clockCounter { top: 50px; }
         #dragHandle { position: absolute; top:2px; left:2px; width:16px; height:16px; background:#0f0; cursor:grab; border-radius:3px; }
+        #shellmodGear { position: absolute; top:8px; right:8px; cursor: pointer; font-size: 18px; z-index: 10001; }
+        #shellmodSettings { position: absolute; top:36px; right:8px; width: 200px; padding: 8px; background: rgba(0,0,0,0.8); color: #0f0; border-radius: 6px; display: none; font-size: 13px; z-index: 10001; }
+        #shellmodSettings select, #shellmodSettings button { background: #111; color: #0f0; border: 1px solid #0f0; border-radius:4px; width:100%; margin-top:4px; }
     `);
 
+    // --- Menu ---
     const menu = document.createElement("div");
     menu.id = "shellmodMenu";
     menu.innerHTML = `
@@ -91,13 +95,77 @@
     `;
     document.body.appendChild(menu);
 
-    document.querySelectorAll(".category-header").forEach(h => h.addEventListener("click", ()=>{
-        const content=h.nextElementSibling;
-        const isOpen=content.style.display==="block";
-        content.style.display=isOpen?"none":"block";
-        h.textContent=h.textContent.replace(isOpen?"[-]":"[+]","[-]".includes(h.textContent)?"[+]":"[-]");
+    // --- Gear & Settings Panel ---
+    const gear = document.createElement("div");
+    gear.id = "shellmodGear";
+    gear.innerHTML = "⚙️";
+    menu.appendChild(gear);
+
+    const settingsPanel = document.createElement("div");
+    settingsPanel.id = "shellmodSettings";
+    settingsPanel.innerHTML = `
+        <div style="font-weight:bold; margin-bottom:6px;">Settings</div>
+        <label for="themeSelect">Theme:</label>
+        <select id="themeSelect">
+            <option value="default">Green/Black</option>
+            <option value="macbook">MacBook Transparent</option>
+        </select>
+    `;
+    menu.appendChild(settingsPanel);
+
+    gear.addEventListener("click", () => {
+        settingsPanel.style.display = settingsPanel.style.display === "none" ? "block" : "none";
+    });
+
+    const themeSelect = document.getElementById("themeSelect");
+    themeSelect.addEventListener("change", () => {
+        const val = themeSelect.value;
+        if(val === "default"){
+            menu.style.background = "#111";
+            menu.style.color = "#0f0";
+            menu.style.border = "2px solid #0f0";
+            menu.style.backdropFilter = "";
+            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range]").forEach(el=>{
+                el.style.background="#111";
+                el.style.color="#0f0";
+                el.style.border="1px solid #0f0";
+            });
+            document.querySelectorAll(".category-header, .category-content").forEach(el=>{
+                el.style.background="#111";
+                el.style.color="#0f0";
+                el.style.border="1px solid #0f0";
+            });
+        } else if(val === "macbook"){
+            menu.style.background = "rgba(255,255,255,0.2)";
+            menu.style.color = "#000";
+            menu.style.border = "1px solid rgba(0,0,0,0.3)"; // black highlights
+            menu.style.backdropFilter = "blur(10px)";
+            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range]").forEach(el=>{
+                el.style.background="rgba(255,255,255,0.2)";
+                el.style.color="#000";
+                el.style.border="1px solid rgba(0,0,0,0.3)"; // black highlights
+            });
+            document.querySelectorAll(".category-header, .category-content").forEach(el=>{
+                el.style.background="rgba(255,255,255,0.2)";
+                el.style.color="#000";
+                el.style.border="1px solid rgba(0,0,0,0.3)"; // black highlights
+            });
+        }
+    });
+
+    // --- Collapsible ---
+    document.querySelectorAll(".category-header").forEach(h => h.addEventListener("click", () => {
+        const content = h.nextElementSibling;
+        const isOpen = content.style.display === "block";
+        content.style.display = isOpen ? "none" : "block";
+        if (isOpen) {
+            h.textContent = h.textContent.replace("[-]", "[+]");
+        } else {
+            h.textContent = h.textContent.replace("[+]", "[-]");
+        }
     }));
 
+    // --- Draggable ---
     function makeDraggable(el, handle) {
         let isDragging=false, offsetX=0, offsetY=0;
         handle.addEventListener("mousedown", e=>{
@@ -119,6 +187,7 @@
     }
     makeDraggable(menu, document.getElementById("dragHandle"));
 
+    // --- Crosshair ---
     const crosshair=document.createElement("div"); crosshair.id="customCrosshair";
     const hLine=document.createElement("div"); hLine.className="hLine";
     const vLine=document.createElement("div"); vLine.className="vLine";
@@ -179,18 +248,18 @@
     document.getElementById("crosshairThickness").addEventListener("input", e=>{ crosshairThickness=e.target.value; updateCrosshair(); });
     updateCrosshair();
 
-    // Ping
+    // --- Ping ---
     function startPing(){if(pingDiv)return; pingDiv=document.createElement("div"); pingDiv.id="pingCounter"; pingDiv.textContent="Ping: ..."; document.body.appendChild(pingDiv); makeDraggable(pingDiv, pingDiv); async function loop(){while(pingEnabled){const start=performance.now();await fetch(location.href,{method:"HEAD",cache:"no-cache"}).catch(()=>{}); const latency=Math.round(performance.now()-start); if(pingDiv) pingDiv.textContent="Ping: "+latency+" ms"; await new Promise(r=>setTimeout(r,2000));}} loop();}
     function stopPing(){if(pingDiv){pingDiv.remove(); pingDiv=null;}}
     document.getElementById("togglePing").addEventListener("change", e=>{pingEnabled=e.target.checked;if(pingEnabled) startPing(); else stopPing();});
 
-    // Clock
+    // --- Clock ---
     function initClock(){if(clockDiv)return; clockDiv=document.createElement("div"); clockDiv.id="clockCounter"; clockDiv.textContent="Clock: 0:00"; document.body.appendChild(clockDiv); clockDiv.style.display="none"; makeDraggable(clockDiv, clockDiv);}
     initClock();
     function updateClock(){var m=Math.floor(clockSeconds/60); var s=clockSeconds%60; clockDiv.textContent="Clock: "+m+":"+(s<10?"0"+s:s);}
-    document.getElementById("clockToggle").addEventListener("click",function(){if(!clockRunning){clockRunning=true;clockDiv.style.display="block";this.textContent="Stop"; clockInterval=setInterval(()=>{clockSeconds++; updateClock();},1000);}else{clockRunning=false;this.textContent="Start"; clearInterval(clockInterval); clockSeconds=0; updateClock(); clockDiv.style.display="none";}});
+    document.getElementById("clockToggle").addEventListener("click",function(){if(!clockRunning){clockRunning=true;clockDiv.style.display="block"; this.textContent="Stop"; clockInterval=setInterval(()=>{clockSeconds++; updateClock();},1000);}else{clockRunning=false; this.textContent="Start"; clearInterval(clockInterval); clockSeconds=0; updateClock(); clockDiv.style.display="none";}});
 
-    // Music
+    // --- Music ---
     const musicFile=document.getElementById("musicFile");
     const musicPlayPause=document.getElementById("musicPlayPause");
     function startMusic(){musicFile.style.display="block"; musicPlayPause.style.display="block";}
@@ -199,6 +268,6 @@
     musicPlayPause.addEventListener("click", ()=>{if(!audio)return; if(audio.paused){audio.play(); musicPlayPause.textContent="Pause";} else{audio.pause(); musicPlayPause.textContent="Play";}});
     document.getElementById("toggleMusic").addEventListener("change", e=>{musicEnabled=e.target.checked;if(musicEnabled) startMusic(); else stopMusic();});
 
-    // Menu toggle
+    // --- Menu toggle ---
     window.addEventListener("keydown",e=>{if(e.key==="0"){menuVisible=!menuVisible; menu.style.display=menuVisible?"block":"none";}});
 })();

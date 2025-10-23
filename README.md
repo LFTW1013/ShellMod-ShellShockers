@@ -19,7 +19,7 @@ https://www.tampermonkey.net/
 +++++++++++++++++++++++++++++++++++++++++
 
 INFO:
-
+- It should work with all browsers, but popular browsers like Chrome, Edge, Firefox and Opera are recomended 
 - The JL_THE_PRO Script is a script for testing, items that are working their way into the final "source.js" code.
 -----------------------------------------
 

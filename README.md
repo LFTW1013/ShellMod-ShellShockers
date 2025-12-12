@@ -3,7 +3,7 @@ ShellMod (Formerly LebMod) is a Modding menu/service for Shellshockers with the 
 - Green, Black, Red Circular and Standard Crosshairs
 - Resize Cursor Controls
 - Ping Display
-- Music Player
+- Music Player with mp3 and YT Link support
 - Gameplay Clock
 - Menu Themes
 --------------------------------

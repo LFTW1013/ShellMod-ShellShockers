@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ShellShockers ShellMod
 // @namespace    http://tampermonkey.net/
-// @version      3.8
-// @description  ShellMod: Crosshair enable + standard/circular/rainbow + resize/thickness sliders, fixed right-angle issue + rainbow gradient lines + global menu themes (MacBook Transparent now with black highlights)
+// @version      3.9
+// @description  ShellMod: Crosshair enable + standard/circular/rainbow + resize/thickness sliders, fixed right-angle issue + rainbow gradient lines + global menu themes (MacBook Transparent now with black highlights) + YouTube player
 // @author       CJ_THE_PRO
 // @match        *://shellshock.io/*
 // @grant        GM_addStyle
@@ -15,12 +15,13 @@
     let rainbowEnabled = false;
     let pingEnabled = false;
     let musicEnabled = false;
+    let youtubeEnabled = false;
     let clockRunning = false;
     let clockSeconds = 0;
     let clockInterval;
     let crosshairSize = 40;
     let crosshairThickness = 2;
-    let pingDiv, clockDiv, audio;
+    let pingDiv, clockDiv, audio, ytPlayer;
     let menuVisible = true;
 
     GM_addStyle(`
@@ -44,6 +45,8 @@
         #shellmodGear { position: absolute; top:8px; right:8px; cursor: pointer; font-size: 18px; z-index: 10001; }
         #shellmodSettings { position: absolute; top:36px; right:8px; width: 200px; padding: 8px; background: rgba(0,0,0,0.8); color: #0f0; border-radius: 6px; display: none; font-size: 13px; z-index: 10001; }
         #shellmodSettings select, #shellmodSettings button { background: #111; color: #0f0; border: 1px solid #0f0; border-radius:4px; width:100%; margin-top:4px; }
+        #ytPlayerContainer { position: fixed; bottom: 10px; right: 10px; width: 0; height: 0; overflow: hidden; z-index: 8999; }
+        .yt-input { width: 100%; padding: 4px; background: #111; color: #0f0; border: 1px solid #0f0; border-radius: 4px; margin-top: 4px; font-family: monospace; font-size: 12px; }
     `);
 
     // --- Menu ---
@@ -90,6 +93,15 @@
                 <div class="shellmodToggle"><label>Music Player</label><input type="checkbox" id="toggleMusic"></div>
                 <input type="file" id="musicFile" accept="audio/*" style="width:100%; margin-top:6px; display:none;">
                 <button id="musicPlayPause" style="width:100%; margin-top:4px; display:none;">Play</button>
+                <hr>
+                <div class="shellmodToggle"><label>YouTube Player</label><input type="checkbox" id="toggleYoutube"></div>
+                <div id="youtubeControls" style="display:none;">
+                    <input type="text" id="ytLink" class="yt-input" placeholder="Paste YouTube URL here...">
+                    <div style="display:flex; gap:4px; margin-top:4px;">
+                        <button id="ytLoad" style="flex:1;">Load</button>
+                        <button id="ytPlayPause" style="flex:1;">Play</button>
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -125,7 +137,7 @@
             menu.style.color = "#0f0";
             menu.style.border = "2px solid #0f0";
             menu.style.backdropFilter = "";
-            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range]").forEach(el=>{
+            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range], .yt-input").forEach(el=>{
                 el.style.background="#111";
                 el.style.color="#0f0";
                 el.style.border="1px solid #0f0";
@@ -138,17 +150,17 @@
         } else if(val === "macbook"){
             menu.style.background = "rgba(255,255,255,0.2)";
             menu.style.color = "#000";
-            menu.style.border = "1px solid rgba(0,0,0,0.3)"; // black highlights
+            menu.style.border = "1px solid rgba(0,0,0,0.3)";
             menu.style.backdropFilter = "blur(10px)";
-            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range]").forEach(el=>{
+            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range], .yt-input").forEach(el=>{
                 el.style.background="rgba(255,255,255,0.2)";
                 el.style.color="#000";
-                el.style.border="1px solid rgba(0,0,0,0.3)"; // black highlights
+                el.style.border="1px solid rgba(0,0,0,0.3)";
             });
             document.querySelectorAll(".category-header, .category-content").forEach(el=>{
                 el.style.background="rgba(255,255,255,0.2)";
                 el.style.color="#000";
-                el.style.border="1px solid rgba(0,0,0,0.3)"; // black highlights
+                el.style.border="1px solid rgba(0,0,0,0.3)";
             });
         }
     });
@@ -267,6 +279,119 @@
     musicFile.addEventListener("change", e=>{const file=e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=evt=>{if(audio)audio.pause(); audio=new Audio(evt.target.result); audio.loop=true;}; reader.readAsDataURL(file);});
     musicPlayPause.addEventListener("click", ()=>{if(!audio)return; if(audio.paused){audio.play(); musicPlayPause.textContent="Pause";} else{audio.pause(); musicPlayPause.textContent="Play";}});
     document.getElementById("toggleMusic").addEventListener("change", e=>{musicEnabled=e.target.checked;if(musicEnabled) startMusic(); else stopMusic();});
+
+    function extractVideoId(url) {
+        const patterns = [
+            /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+            /^([a-zA-Z0-9_-]{11})$/
+        ];
+        for (let pattern of patterns) {
+            const match = url.match(pattern);
+            if (match) return match[1];
+        }
+        return null;
+    }
+
+    // --- YouTube Player ---
+    const ytContainer = document.createElement("div");
+    ytContainer.id = "ytPlayerContainer";
+    document.body.appendChild(ytContainer);
+
+    const youtubeControls = document.getElementById("youtubeControls");
+    const ytLink = document.getElementById("ytLink");
+    const ytLoad = document.getElementById("ytLoad");
+    const ytPlayPause = document.getElementById("ytPlayPause");
+    let ytIframe = null;
+
+    function startYoutube() {
+        youtubeControls.style.display = "block";
+    }
+
+    function stopYoutube() {
+        youtubeControls.style.display = "none";
+        if (ytIframe) {
+            ytIframe.remove();
+            ytIframe = null;
+            ytPlayer = null;
+        }
+    }
+
+    function loadYouTubeVideo(url) {
+        if (!url) {
+            console.log("No URL provided");
+            alert("Please enter a YouTube URL");
+            return;
+        }
+        
+        console.log("Attempting to load URL:", url);
+        
+        const videoId = extractVideoId(url);
+        if (!videoId) {
+            alert("Invalid YouTube URL. Try: youtube.com/watch?v=VIDEO_ID or youtu.be/VIDEO_ID");
+            return;
+        }
+
+        console.log("Video ID extracted:", videoId);
+
+        // Remove old iframe if exists
+        if (ytIframe) {
+            ytIframe.remove();
+        }
+
+        // Create new iframe
+        ytIframe = document.createElement('iframe');
+        ytIframe.width = '0';
+        ytIframe.height = '0';
+        ytIframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&controls=0&enablejsapi=1`;
+        ytIframe.allow = 'autoplay';
+        ytIframe.style.border = 'none';
+        ytContainer.appendChild(ytIframe);
+        
+        ytPlayer = ytIframe;
+        ytPlayPause.textContent = "Pause";
+        console.log("YouTube iframe created and added");
+    }
+
+    // Load button click
+    ytLoad.addEventListener("click", () => {
+        loadYouTubeVideo(ytLink.value.trim());
+    });
+
+    // Also allow Enter key
+    ytLink.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+            loadYouTubeVideo(ytLink.value.trim());
+        }
+    });
+
+    ytPlayPause.addEventListener("click", () => {
+        console.log("Play/Pause clicked. ytIframe:", ytIframe);
+        
+        if (!ytIframe) {
+            alert("Please paste a YouTube URL first!");
+            return;
+        }
+        
+        // Toggle by reloading iframe with/without autoplay
+        const currentSrc = ytIframe.src;
+        console.log("Current src:", currentSrc);
+        
+        if (currentSrc.includes('autoplay=1')) {
+            // Pause by setting autoplay to 0
+            ytIframe.src = currentSrc.replace('autoplay=1', 'autoplay=0');
+            ytPlayPause.textContent = "Play";
+        } else {
+            // Play by setting autoplay to 1
+            ytIframe.src = currentSrc.replace('autoplay=0', 'autoplay=1');
+            ytPlayPause.textContent = "Pause";
+        }
+    });
+
+    document.getElementById("toggleYoutube").addEventListener("change", e => {
+        youtubeEnabled = e.target.checked;
+        if (youtubeEnabled) startYoutube();
+        else stopYoutube();
+    });
 
     // --- Menu toggle ---
     window.addEventListener("keydown",e=>{if(e.key==="0"){menuVisible=!menuVisible; menu.style.display=menuVisible?"block":"none";}});

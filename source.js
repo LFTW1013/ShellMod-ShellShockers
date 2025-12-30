@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      3.9
 // @description  ShellMod: Crosshair enable + standard/circular/rainbow + resize/thickness sliders, fixed right-angle issue + rainbow gradient lines + global menu themes (MacBook Transparent now with black highlights) + YouTube player
-// @author       CJ_THE_PRO
+// @author       LFTW1013
 // @match        *://shellshock.io/*
 // @grant        GM_addStyle
 // ==/UserScript==
@@ -14,6 +14,7 @@
     let crosshairEnabled = true;
     let rainbowEnabled = false;
     let pingEnabled = false;
+    let fpsEnabled = false;
     let musicEnabled = false;
     let youtubeEnabled = false;
     let clockRunning = false;
@@ -21,7 +22,7 @@
     let clockInterval;
     let crosshairSize = 40;
     let crosshairThickness = 2;
-    let pingDiv, clockDiv, audio, ytPlayer;
+    let pingDiv, clockDiv, fpsDiv, audio, ytPlayer;
     let menuVisible = true;
 
     GM_addStyle(`
@@ -41,6 +42,7 @@
         #customCrosshair .circle { border-radius:50%; border:2px solid transparent; display:none; background:none; }
         #pingCounter, #clockCounter { position: fixed; top: 10px; left: 10px; font-family: monospace; font-size: 14px; padding: 4px 6px; border-radius: 4px; z-index: 9999; cursor: grab; background: rgba(0,0,0,0.5); color: #0f0; border: 1px solid #0f0; }
         #clockCounter { top: 50px; }
+        #fpsCounter { position: fixed; top: 90px; left: 10px; font-family: monospace; font-size: 14px; padding: 4px 6px; border-radius: 4px; z-index: 9999; cursor: grab; background: rgba(0,0,0,0.5); color: #0f0; border: 1px solid #0f0; }
         #dragHandle { position: absolute; top:2px; left:2px; width:16px; height:16px; background:#0f0; cursor:grab; border-radius:3px; }
         #shellmodGear { position: absolute; top:8px; right:8px; cursor: pointer; font-size: 18px; z-index: 10001; }
         #shellmodSettings { position: absolute; top:36px; right:8px; width: 200px; padding: 8px; background: rgba(0,0,0,0.8); color: #0f0; border-radius: 6px; display: none; font-size: 13px; z-index: 10001; }
@@ -59,6 +61,7 @@
             <div class="category-header">[+] Displays</div>
             <div class="category-content">
                 <div class="shellmodToggle"><label>Show Ping</label><input type="checkbox" id="togglePing"></div>
+                <div class="shellmodToggle"><label>Show FPS</label><input type="checkbox" id="toggleFPS"></div>
                 <div class="shellmodToggle"><label>Clock</label><button id="clockToggle">Start</button></div>
             </div>
         </div>
@@ -93,6 +96,7 @@
                 <div class="shellmodToggle"><label>Music Player</label><input type="checkbox" id="toggleMusic"></div>
                 <input type="file" id="musicFile" accept="audio/*" style="width:100%; margin-top:6px; display:none;">
                 <button id="musicPlayPause" style="width:100%; margin-top:4px; display:none;">Play</button>
+                <div class="shellmodToggle" style="display:none;" id="musicVolumeContainer"><label>Volume</label><input type="range" id="musicVolume" min="0" max="100" value="100"></div>
                 <hr>
                 <div class="shellmodToggle"><label>YouTube Player</label><input type="checkbox" id="toggleYoutube"></div>
                 <div id="youtubeControls" style="display:none;">
@@ -265,6 +269,11 @@
     function stopPing(){if(pingDiv){pingDiv.remove(); pingDiv=null;}}
     document.getElementById("togglePing").addEventListener("change", e=>{pingEnabled=e.target.checked;if(pingEnabled) startPing(); else stopPing();});
 
+    // --- FPS ---
+    function startFPS(){if(fpsDiv)return; fpsDiv=document.createElement("div"); fpsDiv.id="fpsCounter"; fpsDiv.textContent="FPS: ..."; document.body.appendChild(fpsDiv); makeDraggable(fpsDiv, fpsDiv); let lastTime=performance.now(); let frames=0; function loop(){frames++; const now=performance.now(); const delta=now-lastTime; if(delta>=1000){const fps=Math.round(frames*1000/delta); if(fpsDiv) fpsDiv.textContent="FPS: "+fps; frames=0; lastTime=now;} if(fpsEnabled) requestAnimationFrame(loop);} loop();}
+    function stopFPS(){if(fpsDiv){fpsDiv.remove(); fpsDiv=null;}}
+    document.getElementById("toggleFPS").addEventListener("change", e=>{fpsEnabled=e.target.checked;if(fpsEnabled) startFPS(); else stopFPS();});
+
     // --- Clock ---
     function initClock(){if(clockDiv)return; clockDiv=document.createElement("div"); clockDiv.id="clockCounter"; clockDiv.textContent="Clock: 0:00"; document.body.appendChild(clockDiv); clockDiv.style.display="none"; makeDraggable(clockDiv, clockDiv);}
     initClock();
@@ -274,10 +283,13 @@
     // --- Music ---
     const musicFile=document.getElementById("musicFile");
     const musicPlayPause=document.getElementById("musicPlayPause");
-    function startMusic(){musicFile.style.display="block"; musicPlayPause.style.display="block";}
-    function stopMusic(){musicFile.style.display="none"; musicPlayPause.style.display="none"; if(audio){audio.pause(); audio=null;}}
-    musicFile.addEventListener("change", e=>{const file=e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=evt=>{if(audio)audio.pause(); audio=new Audio(evt.target.result); audio.loop=true;}; reader.readAsDataURL(file);});
+    const musicVolumeContainer=document.getElementById("musicVolumeContainer");
+    const musicVolume=document.getElementById("musicVolume");
+    function startMusic(){musicFile.style.display="block"; musicPlayPause.style.display="block"; musicVolumeContainer.style.display="block";}
+    function stopMusic(){musicFile.style.display="none"; musicPlayPause.style.display="none"; musicVolumeContainer.style.display="none"; if(audio){audio.pause(); audio=null;}}
+    musicFile.addEventListener("change", e=>{const file=e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=evt=>{if(audio)audio.pause(); audio=new Audio(evt.target.result); audio.loop=true; audio.volume=musicVolume.value/100;}; reader.readAsDataURL(file);});
     musicPlayPause.addEventListener("click", ()=>{if(!audio)return; if(audio.paused){audio.play(); musicPlayPause.textContent="Pause";} else{audio.pause(); musicPlayPause.textContent="Play";}});
+    musicVolume.addEventListener("input", e=>{if(audio) audio.volume=e.target.value/100;});
     document.getElementById("toggleMusic").addEventListener("change", e=>{musicEnabled=e.target.checked;if(musicEnabled) startMusic(); else stopMusic();});
 
     function extractVideoId(url) {
@@ -322,9 +334,9 @@
             alert("Please enter a YouTube URL");
             return;
         }
-        
+
         console.log("Attempting to load URL:", url);
-        
+
         const videoId = extractVideoId(url);
         if (!videoId) {
             alert("Invalid YouTube URL. Try: youtube.com/watch?v=VIDEO_ID or youtu.be/VIDEO_ID");
@@ -346,7 +358,7 @@
         ytIframe.allow = 'autoplay';
         ytIframe.style.border = 'none';
         ytContainer.appendChild(ytIframe);
-        
+
         ytPlayer = ytIframe;
         ytPlayPause.textContent = "Pause";
         console.log("YouTube iframe created and added");
@@ -366,16 +378,16 @@
 
     ytPlayPause.addEventListener("click", () => {
         console.log("Play/Pause clicked. ytIframe:", ytIframe);
-        
+
         if (!ytIframe) {
             alert("Please paste a YouTube URL first!");
             return;
         }
-        
+
         // Toggle by reloading iframe with/without autoplay
         const currentSrc = ytIframe.src;
         console.log("Current src:", currentSrc);
-        
+
         if (currentSrc.includes('autoplay=1')) {
             // Pause by setting autoplay to 0
             ytIframe.src = currentSrc.replace('autoplay=1', 'autoplay=0');

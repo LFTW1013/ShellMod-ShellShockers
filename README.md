@@ -1,4 +1,4 @@
-ShellMod (Formerly LebMod) is a Modding menu/service for Shellshockers with the following mods:
+ShellMod is a Modding menu/service for Shellshockers with the following mods:
 - Rainbow Crosshair
 - Green, Black, Red Circular and Standard Crosshairs
 - Resize Cursor Controls

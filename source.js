@@ -2,7 +2,7 @@
 // @name         ShellShockers ShellMod
 // @namespace    http://tampermonkey.net/
 // @version      3.9
-// @description  ShellMod: Crosshair enable + standard/circular/rainbow + resize/thickness sliders, fixed right-angle issue + rainbow gradient lines + global menu themes (MacBook Transparent now with black highlights) + YouTube player
+// @description  ShellShockers modding service
 // @author       LFTW1013
 // @match        *://shellshock.io/*
 // @grant        GM_addStyle

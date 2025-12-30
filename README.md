@@ -22,7 +22,6 @@ https://www.tampermonkey.net/
 INFO:
 - It should work with all browsers, but popular browsers like Chrome, Edge, Firefox and Opera are recomended 
 - The test script is a script for testing, items that are working their way into the final "source.js" code.
-- there is a YolkBot version coming soon, with better mods and addons.
 -----------------------------------------
 
 This project now includes the collaborator(s):

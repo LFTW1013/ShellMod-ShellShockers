@@ -15,7 +15,7 @@ ShellMod is a client-side UI mod for Shellshockers with the following mods:
   
 Controls:
 
-"0" - Open/Close ShellMod menu
+"=" - Open/Close ShellMod menu
 
 
 ------------------------------------------------------------------------------------

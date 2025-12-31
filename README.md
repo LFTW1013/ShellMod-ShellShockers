@@ -4,6 +4,9 @@ ShellMod is a Modding menu/service for Shellshockers with the following mods:
 - Resize Cursor Controls
 - Ping Display
 - FPS Display
+- AFK Timer (until you get kicked for being idle)
+- Screenshots
+- Ping Alert (an alert if your ping goes above a set number)
 - Music Player with MP3 and YT Link support
 - Gameplay Clock
 - Menu Themes

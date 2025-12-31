@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ShellShockers ShellMod
 // @namespace    http://tampermonkey.net/
-// @version      4.0
+// @version      4.1
 // @description  ShellMod, a shellshockers modding service.
 // @author       LFTW1013
 // @match        *://shellshock.io/*
@@ -30,10 +30,20 @@
     let lastActivityTime = Date.now();
     let pingAlertEnabled = false;
     let pingThreshold = 150;
+    let currentPreset = "default";
 
     GM_addStyle(`
         #shellmodMenu { position: fixed; top: 100px; right: 50px; width: 320px; border-radius: 10px; padding: 24px 8px 8px 8px; font-family: monospace; font-size: 13px; z-index: 10000; background: #111; color: #0f0; border: 2px solid #0f0; }
         #shellmodMenu h1 { text-align: center; font-size: 18px; margin: 5px 0; padding-bottom: 4px; border-bottom: 2px solid #0f0; }
+        .search-container { margin: 8px 0; position: relative; }
+        .search-input { width: 100%; padding: 6px 30px 6px 8px; background: #111; color: #0f0; border: 1px solid #0f0; border-radius: 4px; font-family: monospace; font-size: 13px; }
+        .search-input::placeholder { color: #0a0; opacity: 0.7; }
+        .search-clear { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #0f0; font-size: 16px; display: none; }
+        .search-results { margin: 8px 0; padding: 6px; background: rgba(0,255,0,0.1); border: 1px solid #0f0; border-radius: 4px; display: none; max-height: 200px; overflow-y: auto; }
+        .search-result-item { padding: 4px; margin: 2px 0; cursor: pointer; border-radius: 3px; }
+        .search-result-item:hover { background: rgba(0,255,0,0.2); }
+        .search-highlight { background: rgba(255,255,0,0.3); }
+        .no-results { padding: 8px; text-align: center; opacity: 0.7; }
         .category { margin-top: 8px; border-radius: 6px; }
         .category-header { padding: 4px; cursor: pointer; font-weight: bold; background: #111; border: 1px solid #0f0; }
         .category-content { display: none; padding: 6px; background: #111; }
@@ -61,7 +71,160 @@
         .afk-warning { color: #ff0 !important; }
         .afk-critical { color: #f00 !important; animation: pulse 1s infinite; }
         input[type="number"] { width: 60px; padding: 2px 4px; background: #111; color: #0f0; border: 1px solid #0f0; border-radius: 3px; font-family: monospace; }
+        .preset-item { padding: 6px; margin: 4px 0; background: rgba(0,255,0,0.1); border: 1px solid #0f0; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .preset-item:hover { background: rgba(0,255,0,0.2); }
+        .preset-item.active { background: rgba(0,255,0,0.3); border: 2px solid #0f0; }
+        .preset-delete { color: #f00; font-weight: bold; padding: 2px 6px; margin-left: 8px; }
+        .preset-delete:hover { background: rgba(255,0,0,0.2); border-radius: 3px; }
+        .preset-controls { display: flex; gap: 4px; margin-top: 6px; }
+        .preset-controls button, .preset-controls input { flex: 1; }
     `);
+
+    // --- Preset System ---
+    const presets = {
+        default: {
+            name: "Default",
+            crosshairEnabled: true,
+            rainbowEnabled: false,
+            crosshairSize: 40,
+            crosshairThickness: 2,
+            standardColors: [],
+            circularColors: [],
+            pingEnabled: false,
+            fpsEnabled: false,
+            afkEnabled: false
+        }
+    };
+
+    function saveCurrentAsPreset(presetName) {
+        const standardColors = Array.from(document.querySelectorAll(".standardColor:checked")).map(e => e.value);
+        const circularColors = Array.from(document.querySelectorAll(".circularColor:checked")).map(e => e.value);
+
+        presets[presetName] = {
+            name: presetName,
+            crosshairEnabled: document.getElementById("toggleCrosshair").checked,
+            rainbowEnabled: document.getElementById("toggleRainbow").checked,
+            crosshairSize: parseInt(document.getElementById("crosshairResize").value),
+            crosshairThickness: parseInt(document.getElementById("crosshairThickness").value),
+            standardColors: standardColors,
+            circularColors: circularColors,
+            pingEnabled: pingEnabled,
+            fpsEnabled: fpsEnabled,
+            afkEnabled: afkEnabled
+        };
+
+        localStorage.setItem("shellmodPresets", JSON.stringify(presets));
+        updatePresetList();
+    }
+
+    function loadPreset(presetName) {
+        const preset = presets[presetName];
+        if (!preset) return;
+
+        currentPreset = presetName;
+
+        // Stop all active features first
+        if (pingEnabled) stopPing();
+        if (fpsEnabled) stopFPS();
+        if (afkEnabled) stopAFKTimer();
+
+        // Load crosshair settings
+        document.getElementById("toggleCrosshair").checked = preset.crosshairEnabled;
+        document.getElementById("toggleRainbow").checked = preset.rainbowEnabled;
+        document.getElementById("crosshairResize").value = preset.crosshairSize;
+        document.getElementById("crosshairThickness").value = preset.crosshairThickness;
+        crosshairSize = preset.crosshairSize;
+        crosshairThickness = preset.crosshairThickness;
+
+        // Clear and set standard colors
+        document.querySelectorAll(".standardColor").forEach(cb => cb.checked = false);
+        preset.standardColors.forEach(color => {
+            const cb = document.querySelector(`.standardColor[value="${color}"]`);
+            if (cb) cb.checked = true;
+        });
+
+        // Clear and set circular colors
+        document.querySelectorAll(".circularColor").forEach(cb => cb.checked = false);
+        preset.circularColors.forEach(color => {
+            const cb = document.querySelector(`.circularColor[value="${color}"]`);
+            if (cb) cb.checked = true;
+        });
+
+        // Load display settings
+        document.getElementById("togglePing").checked = preset.pingEnabled;
+        document.getElementById("toggleFPS").checked = preset.fpsEnabled;
+        document.getElementById("toggleAFK").checked = preset.afkEnabled;
+
+        // Apply settings
+        pingEnabled = preset.pingEnabled;
+        fpsEnabled = preset.fpsEnabled;
+        afkEnabled = preset.afkEnabled;
+
+        if (pingEnabled) startPing();
+        if (fpsEnabled) startFPS();
+        if (afkEnabled) startAFKTimer();
+
+        updateCrosshair();
+        updatePresetList();
+    }
+
+    function deletePreset(presetName) {
+        if (presetName === "default") {
+            alert("Cannot delete default preset!");
+            return;
+        }
+        delete presets[presetName];
+        localStorage.setItem("shellmodPresets", JSON.stringify(presets));
+        if (currentPreset === presetName) {
+            currentPreset = "default";
+            loadPreset("default");
+        }
+        updatePresetList();
+    }
+
+    function updatePresetList() {
+        const container = document.getElementById("presetList");
+        container.innerHTML = "";
+
+        Object.keys(presets).forEach(key => {
+            const preset = presets[key];
+            const div = document.createElement("div");
+            div.className = "preset-item" + (currentPreset === key ? " active" : "");
+            div.innerHTML = `
+                <span>${preset.name}</span>
+                ${key !== "default" ? `<span class="preset-delete" data-preset="${key}">✕</span>` : ""}
+            `;
+
+            div.addEventListener("click", (e) => {
+                if (!e.target.classList.contains("preset-delete")) {
+                    loadPreset(key);
+                }
+            });
+
+            const deleteBtn = div.querySelector(".preset-delete");
+            if (deleteBtn) {
+                deleteBtn.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Delete preset "${preset.name}"?`)) {
+                        deletePreset(key);
+                    }
+                });
+            }
+
+            container.appendChild(div);
+        });
+    }
+
+    // Load saved presets from localStorage
+    const savedPresets = localStorage.getItem("shellmodPresets");
+    if (savedPresets) {
+        try {
+            const parsed = JSON.parse(savedPresets);
+            Object.assign(presets, parsed);
+        } catch (e) {
+            console.error("Failed to load presets:", e);
+        }
+    }
 
     // --- Menu ---
     const menu = document.createElement("div");
@@ -69,6 +232,11 @@
     menu.innerHTML = `
         <div id="dragHandle"></div>
         <h1>ShellMod</h1>
+        <div class="search-container">
+            <input type="text" class="search-input" id="modSearch" placeholder="Search mods...">
+            <span class="search-clear" id="searchClear">×</span>
+        </div>
+        <div class="search-results" id="searchResults"></div>
         <div class="category">
             <div class="category-header">[+] Displays</div>
             <div class="category-content">
@@ -108,6 +276,16 @@
             </div>
         </div>
         <div class="category">
+            <div class="category-header">[+] Presets</div>
+            <div class="category-content">
+                <div id="presetList"></div>
+                <div class="preset-controls">
+                    <input type="text" id="presetName" placeholder="Preset name..." style="background: #111; color: #0f0; border: 1px solid #0f0; border-radius: 4px; padding: 4px; font-family: monospace; font-size: 12px;">
+                    <button id="savePreset">Save</button>
+                </div>
+            </div>
+        </div>
+        <div class="category">
             <div class="category-header">[+] Other</div>
             <div class="category-content">
                 <div class="shellmodToggle"><label>Music Player</label><input type="checkbox" id="toggleMusic"></div>
@@ -127,6 +305,139 @@
         </div>
     `;
     document.body.appendChild(menu);
+
+    // --- Search Functionality ---
+    const searchInput = document.getElementById("modSearch");
+    const searchClear = document.getElementById("searchClear");
+    const searchResults = document.getElementById("searchResults");
+
+    const searchableItems = [
+        { category: "Displays", name: "Show Ping", element: "#togglePing" },
+        { category: "Displays", name: "Ping Alert", element: "#togglePingAlert" },
+        { category: "Displays", name: "Show FPS", element: "#toggleFPS" },
+        { category: "Displays", name: "Clock", element: "#clockToggle" },
+        { category: "Displays", name: "AFK Timer", element: "#toggleAFK" },
+        { category: "Crosshairs", name: "Enable Crosshair", element: "#toggleCrosshair" },
+        { category: "Crosshairs", name: "Rainbow Crosshair", element: "#toggleRainbow" },
+        { category: "Crosshairs", name: "Crosshair Resize", element: "#crosshairResize" },
+        { category: "Crosshairs", name: "Crosshair Thickness", element: "#crosshairThickness" },
+        { category: "Crosshairs", name: "Standard Colors", element: ".standardColor" },
+        { category: "Crosshairs", name: "Circular Colors", element: ".circularColor" },
+        { category: "Presets", name: "Save Preset", element: "#savePreset" },
+        { category: "Presets", name: "Load Preset", element: "#presetList" },
+        { category: "Other", name: "Music Player", element: "#toggleMusic" },
+        { category: "Other", name: "YouTube Player", element: "#toggleYoutube" }
+    ];
+
+    searchInput.addEventListener("input", function() {
+        const query = this.value.toLowerCase().trim();
+
+        if (query.length === 0) {
+            searchResults.style.display = "none";
+            searchClear.style.display = "none";
+            removeHighlights();
+            return;
+        }
+
+        searchClear.style.display = "block";
+        const matches = searchableItems.filter(item =>
+            item.name.toLowerCase().includes(query) ||
+            item.category.toLowerCase().includes(query)
+        );
+
+        if (matches.length === 0) {
+            searchResults.innerHTML = '<div class="no-results">No mods found</div>';
+            searchResults.style.display = "block";
+            return;
+        }
+
+        searchResults.innerHTML = matches.map(item =>
+            `<div class="search-result-item" data-element="${item.element}">
+                <strong>${item.category}</strong> → ${highlightMatch(item.name, query)}
+            </div>`
+        ).join("");
+        searchResults.style.display = "block";
+
+        // Add click handlers to results - use setTimeout to ensure elements are in DOM
+        setTimeout(() => {
+            document.querySelectorAll(".search-result-item").forEach(item => {
+                item.addEventListener("click", function() {
+                    const elementSelector = this.getAttribute("data-element");
+                    scrollToElement(elementSelector);
+                    highlightElement(elementSelector);
+                    // Hide search results after clicking
+                    searchResults.style.display = "none";
+                    searchInput.value = "";
+                    searchClear.style.display = "none";
+                });
+            });
+        }, 0);
+    });
+
+    searchClear.addEventListener("click", function() {
+        searchInput.value = "";
+        searchResults.style.display = "none";
+        searchClear.style.display = "none";
+        removeHighlights();
+    });
+
+    function highlightMatch(text, query) {
+        const index = text.toLowerCase().indexOf(query);
+        if (index === -1) return text;
+        return text.substring(0, index) +
+               '<span class="search-highlight">' +
+               text.substring(index, index + query.length) +
+               '</span>' +
+               text.substring(index + query.length);
+    }
+
+    function scrollToElement(selector) {
+        const element = document.querySelector(selector);
+        if (!element) return;
+
+        // Expand the category if it's collapsed
+        const categoryContent = element.closest(".category-content");
+        if (categoryContent && categoryContent.style.display === "none") {
+            const header = categoryContent.previousElementSibling;
+            // Update header text to show it's open
+            header.textContent = header.textContent.replace("[+]", "[-]");
+            categoryContent.style.display = "block";
+        }
+
+        // Scroll within the menu to the element
+        setTimeout(() => {
+            const container = element.closest(".shellmodToggle") || element.parentElement;
+            if (container) {
+                container.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            }
+        }, 100);
+    }
+
+    function highlightElement(selector) {
+        removeHighlights();
+        const element = document.querySelector(selector);
+        if (!element) return;
+
+        const container = element.closest(".shellmodToggle") || element.parentElement;
+        if (container) {
+            container.style.background = "rgba(0,255,0,0.2)";
+            container.style.border = "1px solid #0f0";
+            container.style.borderRadius = "4px";
+            container.style.transition = "all 0.3s";
+
+            setTimeout(() => {
+                container.style.background = "";
+                container.style.border = "";
+            }, 2000);
+        }
+    }
+
+    function removeHighlights() {
+        document.querySelectorAll(".shellmodToggle").forEach(el => {
+            el.style.background = "";
+            el.style.border = "";
+        });
+    }
 
     // --- Gear & Settings Panel ---
     const gear = document.createElement("div");
@@ -158,7 +469,7 @@
             menu.style.color = "#0f0";
             menu.style.border = "2px solid #0f0";
             menu.style.backdropFilter = "";
-            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range], .yt-input").forEach(el=>{
+            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range], .yt-input, .search-input").forEach(el=>{
                 el.style.background="#111";
                 el.style.color="#0f0";
                 el.style.border="1px solid #0f0";
@@ -173,7 +484,7 @@
             menu.style.color = "#000";
             menu.style.border = "1px solid rgba(0,0,0,0.3)";
             menu.style.backdropFilter = "blur(10px)";
-            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range], .yt-input").forEach(el=>{
+            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range], .yt-input, .search-input").forEach(el=>{
                 el.style.background="rgba(255,255,255,0.2)";
                 el.style.color="#000";
                 el.style.border="1px solid rgba(0,0,0,0.3)";
@@ -197,6 +508,26 @@
             h.textContent = h.textContent.replace("[+]", "[-]");
         }
     }));
+    
+    setTimeout(() => {
+        updatePresetList();
+
+        // Save preset button
+        document.getElementById("savePreset").addEventListener("click", () => {
+            const name = document.getElementById("presetName").value.trim();
+            if (!name) {
+                alert("Please enter a preset name!");
+                return;
+            }
+            if (name === "default") {
+                alert("Cannot overwrite default preset!");
+                return;
+            }
+            saveCurrentAsPreset(name);
+            document.getElementById("presetName").value = "";
+            alert(`Preset "${name}" saved!`);
+        });
+    }, 100);
 
     // --- Draggable ---
     function makeDraggable(el, handle) {
@@ -302,7 +633,6 @@
                 if(pingDiv) {
                     pingDiv.textContent="Ping: "+latency+" ms";
 
-                    // Check if alert is enabled and ping exceeds threshold
                     if(pingAlertEnabled && latency > pingThreshold) {
                         pingDiv.classList.add("ping-high");
                     } else {
@@ -366,14 +696,12 @@
         const s = afkSeconds % 60;
         const timeStr = m + ":" + (s < 10 ? "0" + s : s);
 
-        // ShellShockers kicks after ~5 minutes of afk
         afkTimerDiv.textContent = "AFK: " + timeStr + " / 5:00";
 
-        // Warning colors
         afkTimerDiv.classList.remove("afk-warning", "afk-critical");
-        if(afkSeconds >= 240) { // 4+ minutes - critical
+        if(afkSeconds >= 240) {
             afkTimerDiv.classList.add("afk-critical");
-        } else if(afkSeconds >= 180) { // 3+ minutes - warning
+        } else if(afkSeconds >= 180) {
             afkTimerDiv.classList.add("afk-warning");
         }
     }
@@ -404,7 +732,6 @@
         if(afkEnabled) updateAFKTimer();
     }
 
-    // Activity detection
     const activityEvents = ['mousedown', 'mousemove', 'keydown', 'wheel', 'touchstart'];
     activityEvents.forEach(event => {
         document.addEventListener(event, resetAFKTimer);
@@ -504,7 +831,7 @@
 
     ytPlayPause.addEventListener("click", () => {
         if (!ytIframe) {
-            alert("Please paste a YouTube URL first!");
+            alert("Please load a YouTube video first!");
             return;
         }
 

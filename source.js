@@ -925,12 +925,13 @@
     }, 150);
 document.addEventListener("keydown", (e) => {
 
+// close or open with =
+if (e.code === "Equal" || e.key === "=") {
+    menuVisible = !menuVisible;
+    menu.style.display = menuVisible ? "block" : "none";
+}
 
-    // close or open with 0
-    if (e.key === "0" || e.code === "Digit0" || e.code === "Numpad0") {
-        menuVisible = !menuVisible;
-        menu.style.display = menuVisible ? "block" : "none";
-    }
 });
 // random comment from me lol
 })();
+

@@ -27,7 +27,6 @@ https://www.tampermonkey.net/
 
 INFO:
 - It should work with all browsers, but popular browsers like Chrome, Edge, Firefox and Opera are recomended 
-- The test script is a script for testing, items that are working their way into the final "source.js" code.
 - This mod pack does not violate the Shellshockers TOS, because it is only overlays and client-side modifications.
 -----------------------------------------
 

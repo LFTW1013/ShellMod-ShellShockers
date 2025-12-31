@@ -11,8 +11,11 @@ ShellMod is a Modding menu/service for Shellshockers with the following mods:
 - Menu Themes
 - Presets
 --------------------------------
-  Used with a userscript extention like TamperMonkey. You can also just paste this into the shellshock browser console! To use insert the source code into the extention by creating a new userscript and pasting/uploading the code into extention. (Varies depending on which extention you use.) Controls:
-"0" - Open/Close LebMod menu
+  Used with a userscript extention like TamperMonkey. You can also just paste this into the shellshock browser console! To use insert the source code into the extention by creating a new userscript and pasting/uploading the code into extention. (Varies depending on which extention you use.) 
+  
+Controls:
+
+"0" - Open/Close ShellMod menu
 
 
 ------------------------------------------------------------------------------------

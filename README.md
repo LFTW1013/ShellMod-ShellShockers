@@ -9,6 +9,7 @@ ShellMod is a Modding menu/service for Shellshockers with the following mods:
 - Music Player with MP3 and YT Link support
 - Gameplay Clock
 - Menu Themes
+- Presets
 --------------------------------
   Used with a userscript extention like TamperMonkey. You can also just paste this into the shellshock browser console! To use insert the source code into the extention by creating a new userscript and pasting/uploading the code into extention. (Varies depending on which extention you use.) Controls:
 "0" - Open/Close LebMod menu

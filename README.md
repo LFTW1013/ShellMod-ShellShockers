@@ -1,7 +1,7 @@
 ShellMod is a client-side UI mod for Shellshockers with the following mods:
 - Rainbow Crosshair
-- Green, Black, Red Circular and Standard Crosshairs
-- Resize Cursor Controls
+- Standard and Circle Crosshairs
+- Resize Crosshair Controls
 - Ping Display
 - FPS Display
 - AFK Timer (until you get kicked for being idle)

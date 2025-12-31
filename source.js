@@ -2,7 +2,7 @@
 // @name         ShellShockers ShellMod
 // @namespace    http://tampermonkey.net/
 // @version      4.1
-// @description  ShellMod, a shellshockers modding service.
+// @description  ShellMod, a client-side UI mod for Shellshockers.
 // @author       LFTW1013
 // @match        *://shellshock.io/*
 // @grant        GM_addStyle

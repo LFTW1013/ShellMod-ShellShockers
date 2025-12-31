@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ShellShockers ShellMod
 // @namespace    http://tampermonkey.net/
-// @version      4.1
-// @description  ShellMod, a client-side UI mod for Shellshockers.
+// @version      1.10
+// @description  ShellMod, a client-side UI mod for shellshockers.
 // @author       LFTW1013
 // @match        *://shellshock.io/*
 // @grant        GM_addStyle
@@ -13,6 +13,7 @@
 
     let crosshairEnabled = true;
     let rainbowEnabled = false;
+    let circleEnabled = false;
     let pingEnabled = false;
     let fpsEnabled = false;
     let musicEnabled = false;
@@ -31,6 +32,7 @@
     let pingAlertEnabled = false;
     let pingThreshold = 150;
     let currentPreset = "default";
+    let currentDisplayTheme = "default";
 
     GM_addStyle(`
         #shellmodMenu { position: fixed; top: 100px; right: 50px; width: 320px; border-radius: 10px; padding: 24px 8px 8px 8px; font-family: monospace; font-size: 13px; z-index: 10000; background: #111; color: #0f0; border: 2px solid #0f0; }
@@ -49,9 +51,14 @@
         .category-content { display: none; padding: 6px; background: #111; }
         .shellmodToggle { margin: 6px 0; }
         .shellmodToggle label { display:block; margin-bottom: 4px; }
-        .colorRow { display:flex; gap:6px; flex-wrap:wrap; }
-        .colorRow label { background: rgba(255,255,255,0.02); padding:4px 6px; border-radius:4px; cursor:pointer; border:1px solid rgba(15,255,15,0.15); }
+        .colorRow { display:flex; gap:6px; flex-wrap:wrap; align-items: center; }
         .shellmodToggle input[type="checkbox"], select, button, input[type="range"] { cursor:pointer; }
+
+        /* NEW COLOR PICKER STYLES */
+        input[type="color"] { -webkit-appearance: none; border: 1px solid #0f0; width: 50px; height: 25px; background: #111; padding: 0; cursor: pointer; border-radius: 4px; vertical-align: middle; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+
         hr { border: 1px solid #0f0; margin:6px 0; }
         #customCrosshair { position: fixed; top:50%; left:50%; pointer-events: none; z-index:9999; }
         #customCrosshair .hLine, #customCrosshair .vLine, #customCrosshair .circle { position: absolute; background: #0f0; }
@@ -78,6 +85,12 @@
         .preset-delete:hover { background: rgba(255,0,0,0.2); border-radius: 3px; }
         .preset-controls { display: flex; gap: 4px; margin-top: 6px; }
         .preset-controls button, .preset-controls input { flex: 1; }
+
+        /* --- Slimmer sliders so they don't overflow the menu --- */
+        #shellmodMenu input[type="range"] { width: 150px; max-width: calc(100% - 40px); display:inline-block; vertical-align: middle; }
+        /* slightly smaller thumbs for range inputs */
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 16px; border-radius: 3px; }
+        input[type="range"]::-moz-range-thumb { width: 12px; height: 16px; border-radius: 3px; }
     `);
 
     // --- Preset System ---
@@ -86,10 +99,11 @@
             name: "Default",
             crosshairEnabled: true,
             rainbowEnabled: false,
+            circleEnabled: false,
             crosshairSize: 40,
             crosshairThickness: 2,
-            standardColors: [],
-            circularColors: [],
+            crosshairColor: "#00ff00",
+            circleColor: "#00ff00",
             pingEnabled: false,
             fpsEnabled: false,
             afkEnabled: false
@@ -97,23 +111,21 @@
     };
 
     function saveCurrentAsPreset(presetName) {
-        const standardColors = Array.from(document.querySelectorAll(".standardColor:checked")).map(e => e.value);
-        const circularColors = Array.from(document.querySelectorAll(".circularColor:checked")).map(e => e.value);
-
         presets[presetName] = {
             name: presetName,
             crosshairEnabled: document.getElementById("toggleCrosshair").checked,
             rainbowEnabled: document.getElementById("toggleRainbow").checked,
+            circleEnabled: document.getElementById("toggleCircle").checked,
             crosshairSize: parseInt(document.getElementById("crosshairResize").value),
             crosshairThickness: parseInt(document.getElementById("crosshairThickness").value),
-            standardColors: standardColors,
-            circularColors: circularColors,
+            crosshairColor: document.getElementById("crosshairColorPicker").value,
+            circleColor: document.getElementById("circleColorPicker").value,
             pingEnabled: pingEnabled,
             fpsEnabled: fpsEnabled,
             afkEnabled: afkEnabled
         };
 
-        localStorage.setItem("shellmodPresets", JSON.stringify(presets));
+        localStorage.setItem("shellmodPresets_v2", JSON.stringify(presets));
         updatePresetList();
     }
 
@@ -123,42 +135,35 @@
 
         currentPreset = presetName;
 
-        // Stop all active features first
+        // stop all active features first
         if (pingEnabled) stopPing();
         if (fpsEnabled) stopFPS();
         if (afkEnabled) stopAFKTimer();
 
-        // Load crosshair settings
+        // load crosshair settings
         document.getElementById("toggleCrosshair").checked = preset.crosshairEnabled;
         document.getElementById("toggleRainbow").checked = preset.rainbowEnabled;
+        document.getElementById("toggleCircle").checked = preset.circleEnabled; // Load circle toggle
         document.getElementById("crosshairResize").value = preset.crosshairSize;
         document.getElementById("crosshairThickness").value = preset.crosshairThickness;
-        crosshairSize = preset.crosshairSize;
-        crosshairThickness = preset.crosshairThickness;
 
-        // Clear and set standard colors
-        document.querySelectorAll(".standardColor").forEach(cb => cb.checked = false);
-        preset.standardColors.forEach(color => {
-            const cb = document.querySelector(`.standardColor[value="${color}"]`);
-            if (cb) cb.checked = true;
-        });
+        // load colors
+        document.getElementById("crosshairColorPicker").value = preset.crosshairColor || "#00ff00";
+        document.getElementById("circleColorPicker").value = preset.circleColor || "#00ff00";
 
-        // Clear and set circular colors
-        document.querySelectorAll(".circularColor").forEach(cb => cb.checked = false);
-        preset.circularColors.forEach(color => {
-            const cb = document.querySelector(`.circularColor[value="${color}"]`);
-            if (cb) cb.checked = true;
-        });
+        crosshairSize = parseInt(preset.crosshairSize);
+        crosshairThickness = parseInt(preset.crosshairThickness);
 
-        // Load display settings
+        // load display settings
         document.getElementById("togglePing").checked = preset.pingEnabled;
         document.getElementById("toggleFPS").checked = preset.fpsEnabled;
         document.getElementById("toggleAFK").checked = preset.afkEnabled;
 
-        // Apply settings
+        // apply settings
         pingEnabled = preset.pingEnabled;
         fpsEnabled = preset.fpsEnabled;
         afkEnabled = preset.afkEnabled;
+        circleEnabled = preset.circleEnabled;
 
         if (pingEnabled) startPing();
         if (fpsEnabled) startFPS();
@@ -174,7 +179,7 @@
             return;
         }
         delete presets[presetName];
-        localStorage.setItem("shellmodPresets", JSON.stringify(presets));
+        localStorage.setItem("shellmodPresets_v2", JSON.stringify(presets));
         if (currentPreset === presetName) {
             currentPreset = "default";
             loadPreset("default");
@@ -184,6 +189,7 @@
 
     function updatePresetList() {
         const container = document.getElementById("presetList");
+        if(!container) return;
         container.innerHTML = "";
 
         Object.keys(presets).forEach(key => {
@@ -215,8 +221,8 @@
         });
     }
 
-    // Load saved presets from localStorage
-    const savedPresets = localStorage.getItem("shellmodPresets");
+    // load saved presets from localStorage
+    const savedPresets = localStorage.getItem("shellmodPresets_v2");
     if (savedPresets) {
         try {
             const parsed = JSON.parse(savedPresets);
@@ -254,23 +260,25 @@
             <div class="category-header">[+] Crosshairs</div>
             <div class="category-content">
                 <div class="shellmodToggle"><label>Enable Crosshair</label><input type="checkbox" id="toggleCrosshair" checked></div>
-                <div class="shellmodToggle"><label>Rainbow Crosshair</label><input type="checkbox" id="toggleRainbow"></div>
+                <div class="shellmodToggle"><label>Rainbow Mode</label><input type="checkbox" id="toggleRainbow"></div>
                 <div class="shellmodToggle"><label>Resize</label><input type="range" id="crosshairResize" min="20" max="100" value="40"></div>
                 <div class="shellmodToggle"><label>Thickness</label><input type="range" id="crosshairThickness" min="1" max="10" value="2"></div>
                 <hr>
-                <div class="shellmodToggle"><label>STANDARD:</label>
+                <div class="shellmodToggle">
+                    <label>Standard Color:</label>
                     <div class="colorRow">
-                        <label><input type="checkbox" class="standardColor" value="green"> Green</label>
-                        <label><input type="checkbox" class="standardColor" value="red"> Red</label>
-                        <label><input type="checkbox" class="standardColor" value="black"> Black</label>
+                        <input type="color" id="crosshairColorPicker" value="#00ff00">
                     </div>
                 </div>
                 <hr>
-                <div class="shellmodToggle"><label>CIRCULAR:</label>
+                <div class="shellmodToggle">
                     <div class="colorRow">
-                        <label><input type="checkbox" class="circularColor" value="green"> Green</label>
-                        <label><input type="checkbox" class="circularColor" value="red"> Red</label>
-                        <label><input type="checkbox" class="circularColor" value="black"> Black</label>
+                         <label style="margin:0; flex:1;">Enable Circle</label>
+                         <input type="checkbox" id="toggleCircle">
+                    </div>
+                    <label style="margin-top:6px;">Circle Color:</label>
+                    <div class="colorRow">
+                        <input type="color" id="circleColorPicker" value="#00ff00">
                     </div>
                 </div>
             </div>
@@ -306,7 +314,7 @@
     `;
     document.body.appendChild(menu);
 
-    // --- Search Functionality ---
+    // --- Search ---
     const searchInput = document.getElementById("modSearch");
     const searchClear = document.getElementById("searchClear");
     const searchResults = document.getElementById("searchResults");
@@ -321,8 +329,9 @@
         { category: "Crosshairs", name: "Rainbow Crosshair", element: "#toggleRainbow" },
         { category: "Crosshairs", name: "Crosshair Resize", element: "#crosshairResize" },
         { category: "Crosshairs", name: "Crosshair Thickness", element: "#crosshairThickness" },
-        { category: "Crosshairs", name: "Standard Colors", element: ".standardColor" },
-        { category: "Crosshairs", name: "Circular Colors", element: ".circularColor" },
+        { category: "Crosshairs", name: "Crosshair Color", element: "#crosshairColorPicker" },
+        { category: "Crosshairs", name: "Enable Circle", element: "#toggleCircle" },
+        { category: "Crosshairs", name: "Circle Color", element: "#circleColorPicker" },
         { category: "Presets", name: "Save Preset", element: "#savePreset" },
         { category: "Presets", name: "Load Preset", element: "#presetList" },
         { category: "Other", name: "Music Player", element: "#toggleMusic" },
@@ -358,14 +367,12 @@
         ).join("");
         searchResults.style.display = "block";
 
-        // Add click handlers to results - use setTimeout to ensure elements are in DOM
         setTimeout(() => {
             document.querySelectorAll(".search-result-item").forEach(item => {
                 item.addEventListener("click", function() {
                     const elementSelector = this.getAttribute("data-element");
                     scrollToElement(elementSelector);
                     highlightElement(elementSelector);
-                    // Hide search results after clicking
                     searchResults.style.display = "none";
                     searchInput.value = "";
                     searchClear.style.display = "none";
@@ -395,16 +402,13 @@
         const element = document.querySelector(selector);
         if (!element) return;
 
-        // Expand the category if it's collapsed
         const categoryContent = element.closest(".category-content");
         if (categoryContent && categoryContent.style.display === "none") {
             const header = categoryContent.previousElementSibling;
-            // Update header text to show it's open
             header.textContent = header.textContent.replace("[+]", "[-]");
             categoryContent.style.display = "block";
         }
 
-        // Scroll within the menu to the element
         setTimeout(() => {
             const container = element.closest(".shellmodToggle") || element.parentElement;
             if (container) {
@@ -439,7 +443,7 @@
         });
     }
 
-    // --- Gear & Settings Panel ---
+    // --- Settings  ---
     const gear = document.createElement("div");
     gear.id = "shellmodGear";
     gear.innerHTML = "⚙️";
@@ -462,14 +466,15 @@
     });
 
     const themeSelect = document.getElementById("themeSelect");
-    themeSelect.addEventListener("change", () => {
-        const val = themeSelect.value;
-        if(val === "default"){
+
+    function setTheme(theme) {
+        currentDisplayTheme = theme;
+        if (theme === "default") {
             menu.style.background = "#111";
             menu.style.color = "#0f0";
             menu.style.border = "2px solid #0f0";
             menu.style.backdropFilter = "";
-            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range], .yt-input, .search-input").forEach(el=>{
+            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range], .yt-input, .search-input, input[type=color], input[type=number]").forEach(el=>{
                 el.style.background="#111";
                 el.style.color="#0f0";
                 el.style.border="1px solid #0f0";
@@ -479,12 +484,12 @@
                 el.style.color="#0f0";
                 el.style.border="1px solid #0f0";
             });
-        } else if(val === "macbook"){
+        } else if (theme === "macbook") {
             menu.style.background = "rgba(255,255,255,0.2)";
             menu.style.color = "#000";
             menu.style.border = "1px solid rgba(0,0,0,0.3)";
             menu.style.backdropFilter = "blur(10px)";
-            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range], .yt-input, .search-input").forEach(el=>{
+            document.querySelectorAll("#shellmodMenu button, #shellmodMenu select, #shellmodMenu input[type=range], .yt-input, .search-input, input[type=color], input[type=number]").forEach(el=>{
                 el.style.background="rgba(255,255,255,0.2)";
                 el.style.color="#000";
                 el.style.border="1px solid rgba(0,0,0,0.3)";
@@ -495,6 +500,25 @@
                 el.style.border="1px solid rgba(0,0,0,0.3)";
             });
         }
+
+        // update displays immediately
+        updateAllDisplayStyles();
+    }
+
+    function themeFromMenuStyles() {
+
+        try {
+            const bg = (menu.style.background || "").toLowerCase();
+            if (bg.includes("rgba(255,255,255") || bg.includes("transparent") || menu.style.color === "#000" || menu.style.backdropFilter) {
+                return "macbook";
+            }
+        } catch(e){}
+        return "default";
+    }
+
+
+    themeSelect.addEventListener("change", () => {
+        setTheme(themeSelect.value);
     });
 
     // --- Collapsible ---
@@ -508,7 +532,7 @@
             h.textContent = h.textContent.replace("[+]", "[-]");
         }
     }));
-    
+
     setTimeout(() => {
         updatePresetList();
 
@@ -527,7 +551,22 @@
             document.getElementById("presetName").value = "";
             alert(`Preset "${name}" saved!`);
         });
+
+        // apply initial theme from select
+        setTheme(themeSelect.value);
+
     }, 100);
+
+    // Watch for style changes on the menu
+    const mo = new MutationObserver(() => {
+        const guessed = themeFromMenuStyles();
+        if (guessed !== currentDisplayTheme) {
+            // sync select box too
+            if (themeSelect.value !== guessed) themeSelect.value = guessed;
+            setTheme(guessed);
+        }
+    });
+    mo.observe(menu, { attributes: true, attributeFilter: ['style'] });
 
     // --- Draggable ---
     function makeDraggable(el, handle) {
@@ -561,8 +600,12 @@
 
     function updateCrosshair() {
         const rainbow = document.getElementById("toggleRainbow").checked;
-        const standardColors = Array.from(document.querySelectorAll(".standardColor:checked")).map(e=>e.value);
-        const circularColors = Array.from(document.querySelectorAll(".circularColor:checked")).map(e=>e.value);
+        const showCircle = document.getElementById("toggleCircle").checked;
+        const mainColor = document.getElementById("crosshairColorPicker").value;
+        const circularColor = document.getElementById("circleColorPicker").value;
+
+        crosshairSize = parseInt(crosshairSize) || parseInt(document.getElementById("crosshairResize").value) || 40;
+        crosshairThickness = parseInt(crosshairThickness) || parseInt(document.getElementById("crosshairThickness").value) || 2;
 
         crosshair.style.width = crosshair.style.height = crosshairSize + "px";
         crosshair.style.top = "50%";
@@ -581,20 +624,18 @@
         vLine.style.left = "50%";
         vLine.style.transform = "translate(-50%, -50%)";
 
-        const color = standardColors[0] || "#0f0";
-
         if (rainbow) {
             hLine.style.background = "linear-gradient(to right, red, orange, yellow, green, cyan, blue, violet)";
             vLine.style.background = "linear-gradient(to bottom, red, orange, yellow, green, cyan, blue, violet)";
         } else {
-            hLine.style.background = vLine.style.background = color;
+            hLine.style.background = vLine.style.background = mainColor;
         }
 
-        if(circularColors[0]){
+        if(showCircle){
             circleEl.style.display="block";
             circleEl.style.width = circleEl.style.height = crosshairSize + "px";
             circleEl.style.borderWidth = crosshairThickness + "px";
-            circleEl.style.borderColor = rainbow ? "#fff" : circularColors[0];
+            circleEl.style.borderColor = rainbow ? "#fff" : circularColor;
             circleEl.style.top = "50%";
             circleEl.style.left = "50%";
             circleEl.style.transform = "translate(-50%, -50%)";
@@ -607,10 +648,54 @@
 
     document.getElementById("toggleCrosshair").addEventListener("change",updateCrosshair);
     document.getElementById("toggleRainbow").addEventListener("change",updateCrosshair);
-    document.querySelectorAll(".standardColor,.circularColor").forEach(cb=>cb.addEventListener("change",updateCrosshair));
-    document.getElementById("crosshairResize").addEventListener("input", e=>{ crosshairSize=e.target.value; updateCrosshair(); });
-    document.getElementById("crosshairThickness").addEventListener("input", e=>{ crosshairThickness=e.target.value; updateCrosshair(); });
+    document.getElementById("toggleCircle").addEventListener("change",updateCrosshair);
+
+    // New Color Pickers Listeners
+    document.getElementById("crosshairColorPicker").addEventListener("input", updateCrosshair);
+    document.getElementById("circleColorPicker").addEventListener("input", updateCrosshair);
+
+    document.getElementById("crosshairResize").addEventListener("input", e=>{ crosshairSize=parseInt(e.target.value); updateCrosshair(); });
+    document.getElementById("crosshairThickness").addEventListener("input", e=>{ crosshairThickness=parseInt(e.target.value); updateCrosshair(); });
     updateCrosshair();
+
+    // ---------- Display theme helpers ----------
+    function getDisplayStyleForTheme(theme) {
+        if (theme === "macbook") {
+            return {
+                background: "rgba(255,255,255,0.85)",
+                color: "#000",
+                border: "1px solid rgba(0,0,0,0.2)",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.08)"
+            };
+        } else {
+            // default green/black
+            return {
+                background: "rgba(0,0,0,0.5)",
+                color: "#0f0",
+                border: "1px solid #0f0",
+                boxShadow: "none"
+            };
+        }
+    }
+
+    function applyDisplayStylesTo(el) {
+        if(!el) return;
+        const s = getDisplayStyleForTheme(currentDisplayTheme);
+        el.style.background = s.background;
+        el.style.color = s.color;
+        el.style.border = s.border;
+        el.style.boxShadow = s.boxShadow;
+        el.style.fontFamily = "monospace";
+        el.style.fontSize = "14px";
+        el.style.padding = "4px 6px";
+        el.style.borderRadius = "4px";
+    }
+
+    function updateAllDisplayStyles() {
+        [pingDiv, fpsDiv, clockDiv, afkTimerDiv].forEach(el => {
+            if (el) applyDisplayStylesTo(el);
+        });
+    }
 
     // --- Ping with Alert ---
     let currentPing = 0;
@@ -619,6 +704,7 @@
         pingDiv=document.createElement("div");
         pingDiv.id="pingCounter";
         pingDiv.textContent="Ping: ...";
+        applyDisplayStylesTo(pingDiv);
         document.body.appendChild(pingDiv);
         makeDraggable(pingDiv, pingDiv);
         document.getElementById("pingAlertContainer").style.display = "block";
@@ -669,73 +755,82 @@
     });
 
     // --- FPS ---
-    function startFPS(){if(fpsDiv)return; fpsDiv=document.createElement("div"); fpsDiv.id="fpsCounter"; fpsDiv.textContent="FPS: ..."; document.body.appendChild(fpsDiv); makeDraggable(fpsDiv, fpsDiv); let lastTime=performance.now(); let frames=0; function loop(){frames++; const now=performance.now(); const delta=now-lastTime; if(delta>=1000){const fps=Math.round(frames*1000/delta); if(fpsDiv) fpsDiv.textContent="FPS: "+fps; frames=0; lastTime=now;} if(fpsEnabled) requestAnimationFrame(loop);} loop();}
+    function startFPS(){
+        if(fpsDiv) return;
+        fpsDiv=document.createElement("div"); fpsDiv.id="fpsCounter"; fpsDiv.textContent="FPS: ...";
+        applyDisplayStylesTo(fpsDiv);
+        document.body.appendChild(fpsDiv); makeDraggable(fpsDiv, fpsDiv);
+        let lastTime=performance.now(); let frames=0; function loop(){frames++; const now=performance.now(); const delta=now-lastTime; if(delta>=1000){ if(fpsDiv) fpsDiv.textContent="FPS: "+frames; frames=0; lastTime=now; } if(fpsEnabled) requestAnimationFrame(loop);} if(fpsEnabled) loop();
+    }
     function stopFPS(){if(fpsDiv){fpsDiv.remove(); fpsDiv=null;}}
-    document.getElementById("toggleFPS").addEventListener("change", e=>{fpsEnabled=e.target.checked;if(fpsEnabled) startFPS(); else stopFPS();});
+    document.getElementById("toggleFPS").addEventListener("change", e=>{ fpsEnabled=e.target.checked; if(fpsEnabled)startFPS(); else stopFPS(); });
 
     // --- Clock ---
-    function initClock(){if(clockDiv)return; clockDiv=document.createElement("div"); clockDiv.id="clockCounter"; clockDiv.textContent="Clock: 0:00"; document.body.appendChild(clockDiv); clockDiv.style.display="none"; makeDraggable(clockDiv, clockDiv);}
-    initClock();
-    function updateClock(){var m=Math.floor(clockSeconds/60); var s=clockSeconds%60; clockDiv.textContent="Clock: "+m+":"+(s<10?"0"+s:s);}
-    document.getElementById("clockToggle").addEventListener("click",function(){if(!clockRunning){clockRunning=true;clockDiv.style.display="block"; this.textContent="Stop"; clockInterval=setInterval(()=>{clockSeconds++; updateClock();},1000);}else{clockRunning=false; this.textContent="Start"; clearInterval(clockInterval); clockSeconds=0; updateClock(); clockDiv.style.display="none";}});
+    document.getElementById("clockToggle").addEventListener("click", ()=>{
+        if(clockRunning){
+            clearInterval(clockInterval); clockRunning=false; document.getElementById("clockToggle").textContent="Start";
+            if(clockDiv){ clockDiv.remove(); clockDiv=null; }
+        } else {
+            clockRunning=true; document.getElementById("clockToggle").textContent="Stop";
+            clockDiv=document.createElement("div"); clockDiv.id="clockCounter";
+            applyDisplayStylesTo(clockDiv);
+            document.body.appendChild(clockDiv); makeDraggable(clockDiv, clockDiv);
+            clockSeconds=0;
+            clockDiv.textContent="00:00:00";
+            const startT=Date.now();
+            clockInterval=setInterval(()=>{
+                const diff=Math.floor((Date.now()-startT)/1000);
+                const h=Math.floor(diff/3600).toString().padStart(2,'0');
+                const m=Math.floor((diff%3600)/60).toString().padStart(2,'0');
+                const s=(diff%60).toString().padStart(2,'0');
+                if(clockDiv)clockDiv.textContent=`${h}:${m}:${s}`;
+            },1000);
+        }
+    });
 
     // --- AFK Timer ---
-    function initAFKTimer(){
+    function startAFKTimer() {
         if(afkTimerDiv) return;
         afkTimerDiv = document.createElement("div");
         afkTimerDiv.id = "afkTimer";
-        afkTimerDiv.textContent = "AFK: 0:00 / 5:00";
+        afkTimerDiv.textContent = "AFK: 0s";
+        applyDisplayStylesTo(afkTimerDiv);
         document.body.appendChild(afkTimerDiv);
-        afkTimerDiv.style.display = "none";
         makeDraggable(afkTimerDiv, afkTimerDiv);
-    }
-    initAFKTimer();
-
-    function updateAFKTimer(){
-        const m = Math.floor(afkSeconds / 60);
-        const s = afkSeconds % 60;
-        const timeStr = m + ":" + (s < 10 ? "0" + s : s);
-
-        afkTimerDiv.textContent = "AFK: " + timeStr + " / 5:00";
-
-        afkTimerDiv.classList.remove("afk-warning", "afk-critical");
-        if(afkSeconds >= 240) {
-            afkTimerDiv.classList.add("afk-critical");
-        } else if(afkSeconds >= 180) {
-            afkTimerDiv.classList.add("afk-warning");
-        }
-    }
-
-    function startAFKTimer(){
-        if(!afkTimerDiv) initAFKTimer();
-        afkTimerDiv.style.display = "block";
-        lastActivityTime = Date.now();
-        afkSeconds = 0;
-        updateAFKTimer();
 
         afkInterval = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - lastActivityTime) / 1000);
-            afkSeconds = elapsed;
-            updateAFKTimer();
+            if(!afkEnabled) return;
+            const now = Date.now();
+            const inactiveSeconds = Math.floor((now - lastActivityTime) / 1000);
+
+            if(afkTimerDiv) {
+                afkTimerDiv.textContent = `AFK: ${inactiveSeconds}s`;
+                afkTimerDiv.classList.remove("afk-warning", "afk-critical");
+
+                if (inactiveSeconds > 300) { // 5 mins
+                     afkTimerDiv.classList.add("afk-critical");
+                } else if (inactiveSeconds > 120) { // 2 mins
+                     afkTimerDiv.classList.add("afk-warning");
+                }
+            }
         }, 1000);
     }
 
-    function stopAFKTimer(){
-        if(afkInterval) clearInterval(afkInterval);
-        if(afkTimerDiv) afkTimerDiv.style.display = "none";
-        afkSeconds = 0;
+    function stopAFKTimer() {
+        if(afkTimerDiv) {
+            afkTimerDiv.remove();
+            afkTimerDiv = null;
+        }
+        clearInterval(afkInterval);
     }
 
-    function resetAFKTimer(){
+    function resetAFK() {
         lastActivityTime = Date.now();
-        afkSeconds = 0;
-        if(afkEnabled) updateAFKTimer();
+        if(afkTimerDiv && afkEnabled) {
+            afkTimerDiv.textContent = "AFK: 0s";
+            afkTimerDiv.classList.remove("afk-warning", "afk-critical");
+        }
     }
-
-    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'wheel', 'touchstart'];
-    activityEvents.forEach(event => {
-        document.addEventListener(event, resetAFKTimer);
-    });
 
     document.getElementById("toggleAFK").addEventListener("change", e => {
         afkEnabled = e.target.checked;
@@ -743,118 +838,99 @@
         else stopAFKTimer();
     });
 
-    // --- Music ---
-    const musicFile=document.getElementById("musicFile");
-    const musicPlayPause=document.getElementById("musicPlayPause");
-    const musicVolumeContainer=document.getElementById("musicVolumeContainer");
-    const musicVolume=document.getElementById("musicVolume");
-    function startMusic(){musicFile.style.display="block"; musicPlayPause.style.display="block"; musicVolumeContainer.style.display="block";}
-    function stopMusic(){musicFile.style.display="none"; musicPlayPause.style.display="none"; musicVolumeContainer.style.display="none"; if(audio){audio.pause(); audio=null;}}
-    musicFile.addEventListener("change", e=>{const file=e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=evt=>{if(audio)audio.pause(); audio=new Audio(evt.target.result); audio.loop=true; audio.volume=musicVolume.value/100;}; reader.readAsDataURL(file);});
-    musicPlayPause.addEventListener("click", ()=>{if(!audio)return; if(audio.paused){audio.play(); musicPlayPause.textContent="Pause";} else{audio.pause(); musicPlayPause.textContent="Play";}});
-    musicVolume.addEventListener("input", e=>{if(audio) audio.volume=e.target.value/100;});
-    document.getElementById("toggleMusic").addEventListener("change", e=>{musicEnabled=e.target.checked;if(musicEnabled) startMusic(); else stopMusic();});
+    ['mousemove', 'keydown', 'mousedown', 'scroll'].forEach(evt => {
+        document.addEventListener(evt, resetAFK);
+    });
 
-    function extractVideoId(url) {
-        const patterns = [
-            /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
-            /^([a-zA-Z0-9_-]{11})$/
-        ];
-        for (let pattern of patterns) {
-            const match = url.match(pattern);
-            if (match) return match[1];
+    // --- Music Player ---
+    const musicContainer=document.getElementById("musicVolumeContainer");
+    document.getElementById("toggleMusic").addEventListener("change", e=>{
+        const musicFileIn=document.getElementById("musicFile");
+        const playBtn=document.getElementById("musicPlayPause");
+        if(e.target.checked){
+            musicFileIn.style.display="block"; playBtn.style.display="block"; musicContainer.style.display="block";
+        } else {
+            musicFileIn.style.display="none"; playBtn.style.display="none"; musicContainer.style.display="none";
+            if(audio){ audio.pause(); audio=null; playBtn.textContent="Play"; }
         }
-        return null;
-    }
+    });
+    document.getElementById("musicFile").addEventListener("change", e=>{
+        if(e.target.files[0]){
+            if(audio){ audio.pause(); }
+            audio=new Audio(URL.createObjectURL(e.target.files[0]));
+            audio.volume=document.getElementById("musicVolume").value/100;
+            audio.addEventListener("ended", ()=>{ document.getElementById("musicPlayPause").textContent="Play"; });
+            document.getElementById("musicPlayPause").textContent="Play";
+        }
+    });
+    document.getElementById("musicPlayPause").addEventListener("click", e=>{
+        if(!audio)return;
+        if(audio.paused){ audio.play(); e.target.textContent="Pause"; }
+        else { audio.pause(); e.target.textContent="Play"; }
+    });
+    document.getElementById("musicVolume").addEventListener("input", e=>{ if(audio)audio.volume=e.target.value/100; });
 
-    // --- YouTube Player ---
+    // --- YouTube ---
     const ytContainer = document.createElement("div");
     ytContainer.id = "ytPlayerContainer";
     document.body.appendChild(ytContainer);
 
-    const youtubeControls = document.getElementById("youtubeControls");
-    const ytLink = document.getElementById("ytLink");
-    const ytLoad = document.getElementById("ytLoad");
-    const ytPlayPause = document.getElementById("ytPlayPause");
+    let ytPlayerInstance = null;
     let ytIframe = null;
 
-    function startYoutube() {
-        youtubeControls.style.display = "block";
-    }
-
-    function stopYoutube() {
-        youtubeControls.style.display = "none";
-        if (ytIframe) {
-            ytIframe.remove();
-            ytIframe = null;
-            ytPlayer = null;
-        }
-    }
-
-    function loadYouTubeVideo(url) {
-        if (!url) {
-            alert("Please enter a YouTube URL");
-            return;
-        }
-
-        const videoId = extractVideoId(url);
-        if (!videoId) {
-            alert("Invalid YouTube URL. Try: youtube.com/watch?v=VIDEO_ID or youtu.be/VIDEO_ID");
-            return;
-        }
-
-        if (ytIframe) {
-            ytIframe.remove();
-        }
-
-        ytIframe = document.createElement('iframe');
-        ytIframe.width = '0';
-        ytIframe.height = '0';
-        ytIframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&controls=0&enablejsapi=1`;
-        ytIframe.allow = 'autoplay';
-        ytIframe.style.border = 'none';
-        ytContainer.appendChild(ytIframe);
-
-        ytPlayer = ytIframe;
-        ytPlayPause.textContent = "Pause";
-    }
-
-    ytLoad.addEventListener("click", () => {
-        loadYouTubeVideo(ytLink.value.trim());
-    });
-
-    ytLink.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") {
-            loadYouTubeVideo(ytLink.value.trim());
-        }
-    });
-
-    ytPlayPause.addEventListener("click", () => {
-        if (!ytIframe) {
-            alert("Please load a YouTube video first!");
-            return;
-        }
-
-        const currentSrc = ytIframe.src;
-        if (currentSrc.includes('autoplay=1')) {
-            // Pause by setting autoplay to 0
-            ytIframe.src = currentSrc.replace('autoplay=1', 'autoplay=0');
-            ytPlayPause.textContent = "Play";
-        } else {
-            // Play by setting autoplay to 1
-            ytIframe.src = currentSrc.replace('autoplay=0', 'autoplay=1');
-            ytPlayPause.textContent = "Pause";
-        }
-    });
-
     document.getElementById("toggleYoutube").addEventListener("change", e => {
-        youtubeEnabled = e.target.checked;
-        if (youtubeEnabled) startYoutube();
-        else stopYoutube();
+        const controls = document.getElementById("youtubeControls");
+        controls.style.display = e.target.checked ? "block" : "none";
+        if (!e.target.checked && ytIframe) {
+            // Hide/Stop player if toggled off
+            ytContainer.innerHTML = "";
+            ytIframe = null;
+        }
     });
 
-    // --- Menu toggle ---
-    window.addEventListener("keydown",e=>{
-        if(e.key==="0"){menuVisible=!menuVisible; menu.style.display=menuVisible?"block":"none";}
+    document.getElementById("ytLoad").addEventListener("click", () => {
+        const url = document.getElementById("ytLink").value;
+        let videoId = "";
+        if (url.includes("v=")) {
+            videoId = url.split("v=")[1];
+            const ampersandPosition = videoId.indexOf("&");
+            if (ampersandPosition !== -1) {
+                videoId = videoId.substring(0, ampersandPosition);
+            }
+        } else if (url.includes("youtu.be/")) {
+            videoId = url.split("youtu.be/")[1];
+        }
+
+        if (videoId) {
+            ytContainer.innerHTML = `<iframe id="ytIframe" width="200" height="150" src="https://www.youtube.com/embed/${videoId}?enablejsapi=1" frameborder="0" allow="autoplay; encrypted-media"></iframe>`;
+            ytIframe = document.getElementById("ytIframe");
+        } else {
+            alert("Invalid YouTube URL");
+        }
     });
+
+    document.getElementById("ytPlayPause").addEventListener("click", () => {
+        if (ytIframe) {
+            ytIframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+        }
+    });
+
+    // initial guess for theme
+    setTimeout(() => {
+        const guessed = themeFromMenuStyles();
+        if (guessed && guessed !== currentDisplayTheme) {
+            themeSelect.value = guessed;
+            setTheme(guessed);
+        }
+    }, 150);
+document.addEventListener("keydown", (e) => {
+
+
+    // close or open with 0
+    if (e.key === "0" || e.code === "Digit0" || e.code === "Numpad0") {
+        menuVisible = !menuVisible;
+        menu.style.display = menuVisible ? "block" : "none";
+    }
+});
+// random comment from me lol
 })();
